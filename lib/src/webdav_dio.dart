@@ -89,36 +89,45 @@ class WdDio with DioMixin implements Dio {
     );
 
     if (resp.statusCode == 401) {
-      String? w3AHeader = resp.headers.value('www-authenticate');
-      String? lowerW3AHeader = w3AHeader?.toLowerCase();
+      List<String>? list = resp.headers.map['www-authenticate'];
+//      String? w3AHeader = resp.headers.value('www-authenticate');
+      
 
-      // before is noAuth
-      if (self.auth.type == AuthType.NoAuth) {
-        // Digest
-        if (lowerW3AHeader?.contains('digest') == true) {
-          self.auth = DigestAuth(
-              user: self.auth.user,
-              pwd: self.auth.pwd,
-              dParts: DigestParts(w3AHeader));
+      if (list != null && list.isNotEmpty) {
+        for (final entry in list) {
+          String lowerW3AHeader = entry.toLowerCase();
+
+          // before is noAuth
+          if (self.auth.type == AuthType.NoAuth) {
+            // Digest
+            if (lowerW3AHeader.contains('digest') == true) {
+              self.auth = DigestAuth(
+                  user: self.auth.user,
+                  pwd: self.auth.pwd,
+                  dParts: DigestParts(entry));
+            }
+            // Basic
+            else if (lowerW3AHeader.contains('basic') == true) {
+              self.auth = BasicAuth(user: self.auth.user, pwd: self.auth.pwd);
+              break;
+            }
+            // error
+            else {
+              throw newResponseError(resp);
+            }
+          }
+          // before is digest and Nonce Lifetime is out
+          else if (self.auth.type == AuthType.DigestAuth &&
+              lowerW3AHeader.contains('stale=true') == true) {
+            self.auth = DigestAuth(
+                user: self.auth.user,
+                pwd: self.auth.pwd,
+                dParts: DigestParts(entry));
+            break;
+          } else {
+            throw newResponseError(resp);
+          }
         }
-        // Basic
-        else if (lowerW3AHeader?.contains('basic') == true) {
-          self.auth = BasicAuth(user: self.auth.user, pwd: self.auth.pwd);
-        }
-        // error
-        else {
-          throw newResponseError(resp);
-        }
-      }
-      // before is digest and Nonce Lifetime is out
-      else if (self.auth.type == AuthType.DigestAuth &&
-          lowerW3AHeader?.contains('stale=true') == true) {
-        self.auth = DigestAuth(
-            user: self.auth.user,
-            pwd: self.auth.pwd,
-            dParts: DigestParts(w3AHeader));
-      } else {
-        throw newResponseError(resp);
       }
 
       // retry
